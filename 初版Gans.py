@@ -114,6 +114,7 @@ def show_result(batch_res, fname, grid_size=(8, 8), grid_pad=5):
 def train():
     # load data（mnist手写数据集）
     mnist = input_data.read_data_sets('../../MNIST_data', one_hot=True)
+    img = mnist.train.images[50]
 
     x_data = tf.placeholder(tf.float32, [batch_size, img_size], name="x_data")
     z_prior = tf.placeholder(tf.float32, [batch_size, z_size], name="z_prior")
