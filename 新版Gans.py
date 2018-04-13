@@ -15,7 +15,7 @@ def get_inputs(real_size, noise_size):
     输入函数主要来定义真实图像tensor与噪声图像tensor
     """
     real_img = tf.placeholder(tf.float32, [None, real_size], name='real_img')
-    noise_img = tf.placeholder(tf.float32, [None, noise_size], name='noise_img')
+    noise_img = tf.placeholder(tf.float32, [None, noise_size], name='noise_img')  # 噪声图片
 
     return real_img, noise_img
 
@@ -23,14 +23,15 @@ def get_inputs(real_size, noise_size):
 def get_generator(noise_img, n_units, out_dim, reuse=False, alpha=0.01):
     """
     生成器
-    接收一个噪声图片输出一个与真实图片一样size的图像。
+    接收一个噪声图片，输出一个与真实图片一样size的图像。
     noise_img: 生成器的输入
     n_units: 隐层单元个数
     out_dim: 生成器输出tensor的size，这里应该为32*32=784
     alpha: leaky ReLU系数
+    return： 生成图片对应的logits，生成的图像结果，
     """
     with tf.variable_scope("generator", reuse=reuse):
-        # hidden layer
+        # 全连接层
         hidden1 = tf.layers.dense(noise_img, n_units)  # 输入tensor 和输出维度
 
         # 采用Leaky ReLU作为激活函数的隐层
@@ -109,15 +110,17 @@ d_logits_fake, d_outputs_fake = get_discriminator(g_outputs, d_units,
 # 识别真实图片,在这里，我们使用了单边的Label Smoothing Regularization，它是一种防止过拟合的方式，
 # 在传统的分类中，我们的目标非0即1，从直觉上来理解的话，这样的目标不够soft，会导致训练出的模型对于自己的预测结果过于自信。
 # 因此我们加入一个平滑值来让判别器的泛化效果更好。
+
+# d_loss_real对应着真实图片的loss，它尽可能让判别器的输出接近于1。
 d_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=d_logits_real,
                                                                      labels=tf.ones_like(d_logits_real)) * (1 - smooth))
-# 识别生成的图片
+# d_loss_fake对应着生成图片的loss，它尽可能地让判别器输出为0。
 d_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=d_logits_fake,
                                                                      labels=tf.zeros_like(d_logits_fake)))
-# 总体loss
+# 整个判别器的loss。d_loss_real与d_loss_fake加起来就是整个判别器的损失。
 d_loss = tf.add(d_loss_real, d_loss_fake)
 
-# generator的loss
+# 整个生成器的loss。希望让判别器对自己生成的图片尽可能输出为1。
 g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=d_logits_fake,
                                                                 labels=tf.ones_like(d_logits_fake)) * (1 - smooth))
 
@@ -150,8 +153,6 @@ losses = []
 # 保存生成器变量
 saver = tf.train.Saver(var_list=g_vars)
 
-
-
 # 开始训练
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
@@ -175,15 +176,15 @@ with tf.Session() as sess:
         train_loss_d = sess.run(d_loss,
                                 feed_dict={real_img: batch_images,
                                            noise_img: batch_noise})
-        # real img loss
+        # real img loss，尽可能为1
         train_loss_d_real = sess.run(d_loss_real,
                                      feed_dict={real_img: batch_images,
                                                 noise_img: batch_noise})
-        # fake img loss
+        # fake img loss，尽可能为0
         train_loss_d_fake = sess.run(d_loss_fake,
                                      feed_dict={real_img: batch_images,
                                                 noise_img: batch_noise})
-        # generator loss
+        # generator loss，尽可能为1
         train_loss_g = sess.run(g_loss,
                                 feed_dict={noise_img: batch_noise})
 
@@ -201,7 +202,7 @@ with tf.Session() as sess:
         samples.append(gen_samples)
 
         # 存储checkpoints
-        saver.save(sess, './checkpoints/generator.ckpt')
+        saver.save(sess, './checkpoints/%s_generator.ckpt' % e)
 
 # 绘制LOSS曲线
 fig, ax = plt.subplots(figsize=(20, 7))
@@ -231,9 +232,8 @@ def view_samples(epoch, samples):
 
     return fig, axes
 
-_ = view_samples(-1, samples) # 显示最后一轮的outputs
 
-
+_ = view_samples(-1, samples)  # 显示最后一轮的outputs
 
 # 生成新的图片
 
@@ -244,4 +244,3 @@ with tf.Session() as sess:
     sample_noise = np.random.uniform(-1, 1, size=(25, noise_size))
     gen_samples = sess.run(get_generator(noise_img, g_units, img_size, reuse=True),
                            feed_dict={noise_img: sample_noise})
-
